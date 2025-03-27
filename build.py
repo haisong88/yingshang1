@@ -323,8 +323,6 @@ def build_flutter_deb(version, features):
     system2('flutter build linux --release')
     system2('mkdir -p tmpdeb/usr/bin/')
     system2('mkdir -p tmpdeb/usr/share/rustdesk')
-    system2('mkdir -p tmpdeb/etc/rustdesk/')
-    system2('mkdir -p tmpdeb/etc/pam.d/')
     system2('mkdir -p tmpdeb/usr/share/rustdesk/files/systemd/')
     system2('mkdir -p tmpdeb/usr/share/icons/hicolor/256x256/apps/')
     system2('mkdir -p tmpdeb/usr/share/icons/hicolor/scalable/apps/')
@@ -368,6 +366,8 @@ def build_deb_from_folder(version, binary_folder):
     os.chdir('flutter')
     system2('mkdir -p tmpdeb/usr/bin/')
     system2('mkdir -p tmpdeb/usr/share/rustdesk')
+    system2('mkdir -p tmpdeb/etc/rustdesk/')
+    system2('mkdir -p tmpdeb/etc/pam.d/')
     system2('mkdir -p tmpdeb/usr/share/rustdesk/files/systemd/')
     system2('mkdir -p tmpdeb/usr/share/icons/hicolor/256x256/apps/')
     system2('mkdir -p tmpdeb/usr/share/icons/hicolor/scalable/apps/')
@@ -392,6 +392,8 @@ def build_deb_from_folder(version, binary_folder):
     system2('mkdir -p tmpdeb/DEBIAN')
     generate_control_file(version)
     system2('cp -a ../res/DEBIAN/* tmpdeb/DEBIAN/')
+    # 确保所有的脚本都有执行权限
+    system2('chmod 755 tmpdeb/DEBIAN/preinst tmpdeb/DEBIAN/postinst tmpdeb/DEBIAN/prerm tmpdeb/DEBIAN/postrm')
     md5_file_folder("tmpdeb/")
     system2('dpkg-deb -b tmpdeb rustdesk.deb;')
 
