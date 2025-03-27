@@ -777,7 +777,7 @@ jobs:
         with:
           name: bridge-artifact
           path: ./
-
+          
       - name: Setup vcpkg with Github Actions binary cache
         uses: lukka/run-vcpkg@v11
         with:
@@ -819,6 +819,7 @@ jobs:
             sed -i -e "s/osx_minimum_system_version = \"[0-9]*.[0-9]*\"/osx_minimum_system_version = \"${MIN_MACOS_VERSION}\"/" Cargo.toml
             sed -i -e "s/MACOSX_DEPLOYMENT_TARGET = [0-9]*.[0-9]*;/MACOSX_DEPLOYMENT_TARGET = ${MIN_MACOS_VERSION};/" flutter/macos/Runner.xcodeproj/project.pbxproj
           fi
+          chmod +x build.py
           ./build.py --flutter --hwcodec --unix-file-copy-paste ${{ matrix.job.extra-build-args }}
 
       - name: create unsigned dmg
@@ -882,7 +883,7 @@ jobs:
         with:
           name: rustdesk-unsigned-macos-x86_64
           path: ./
-
+          
       - name: Download Artifacts
         uses: actions/download-artifact@master
         with:
@@ -1634,6 +1635,7 @@ jobs:
             pushd /workspace
             export CARGO_INCREMENTAL=0
             export DEB_ARCH=${{ matrix.job.deb_arch }}
+            chmod +x build.py
             python3 ./build.py --flutter --skip-cargo
             for name in rustdesk*??.deb; do
               mv "$name" "${name%%.deb}-${{ matrix.job.arch }}.deb"
@@ -1903,6 +1905,7 @@ jobs:
             mv ./target/release/rustdesk ./Release/rustdesk
             wget -O ./Release/libsciter-gtk.so https://github.com/c-smile/sciter-sdk/raw/master/bin.lnx/${{ matrix.job.sciter_arch }}/libsciter-gtk.so
             export DEB_ARCH=${{ matrix.job.deb_arch }}
+            chmod +x build.py
             ./build.py --package ./Release
 
       - name: Rename rustdesk
