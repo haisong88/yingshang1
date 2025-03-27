@@ -56,9 +56,32 @@ jobs:
     strategy:
       fail-fast: false
 
+  # 添加一个步骤在所有使用build.py的作业前
+  # 确保构建脚本有执行权限
+  make-build-script-executable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Make build script executable
+        run: |
+          chmod +x build.py
+          chmod +x res/inline-sciter.py
+          
+      - name: Upload executable scripts
+        uses: actions/upload-artifact@master
+        with:
+          name: executable-scripts
+          path: |
+            build.py
+            res/inline-sciter.py
+
   build-for-windows-flutter:
     name: ${{ matrix.job.target }}
-    needs: [build-RustDeskTempTopMostWindow, generate-bridge]
+    needs: [build-RustDeskTempTopMostWindow, generate-bridge, make-build-script-executable]
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
@@ -110,7 +133,7 @@ jobs:
           flutter precache --windows
           Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
-          mv -Force windows-x64-release/*  C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
+          mv -Force windows-x64-release/*  C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
 
       - name: Patch flutter
         shell: bash
@@ -2112,3 +2135,37 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             flutter/build/rustdesk-${{ env.VERSION }}-${{ env.RELEASE_NAME }}.tar.gz
+
+  build-for-mac-flutter:
+    needs: [generate-bridge, make-build-script-executable]
+    name: aarch64-apple-darwin
+    runs-on: macos-latest
+    steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@master
+        with:
+          name: bridge-artifact
+          path: ./
+          
+      - name: Restore executable scripts
+        uses: actions/download-artifact@master
+        with:
+          name: executable-scripts
+          path: ./
+          
+      - name: Make scripts executable
+        run: |
+          chmod +x build.py
+          chmod +x res/inline-sciter.py

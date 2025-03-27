@@ -27,8 +27,29 @@ jobs:
   generate-bridge:
     uses: ./.github/workflows/bridge.yml
 
+  make-build-script-executable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Make build script executable
+        run: |
+          chmod +x build.py
+          chmod +x res/inline-sciter.py
+          
+      - name: Upload executable scripts
+        uses: actions/upload-artifact@master
+        with:
+          name: executable-scripts-android
+          path: |
+            build.py
+            res/inline-sciter.py
+
   build-android-apk:
-    needs: [generate-bridge]
+    needs: [generate-bridge, make-build-script-executable]
     name: 构建Android APK ${{ matrix.job.target }}
     runs-on: ubuntu-20.04
     strategy:
@@ -104,6 +125,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          
+      - name: Restore executable scripts
+        uses: actions/download-artifact@master
+        with:
+          name: executable-scripts-android
+          path: ./
+          
+      - name: Make scripts executable
+        run: |
+          chmod +x build.py
+          chmod +x res/inline-sciter.py
 
       - name: Install flutter
         uses: subosito/flutter-action@v2
