@@ -48,7 +48,7 @@ pub type NotifyMessageBox = fn(String, String, String, String) -> dyn Future<Out
 // the executable name of the portable version
 pub const PORTABLE_APPNAME_RUNTIME_ENV_KEY: &str = "RUSTDESK_APPNAME";
 // 控制是否强制显示安装提示
-pub const FORCE_SHOW_INSTALL_TIP: bool = true;
+pub const FORCE_SHOW_INSTALL_TIP: bool = false;
 
 pub const PLATFORM_WINDOWS: &str = "Windows";
 pub const PLATFORM_LINUX: &str = "Linux";
