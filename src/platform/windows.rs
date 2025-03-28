@@ -2742,3 +2742,16 @@ pub mod reg_display_settings {
         }
     }
 }
+
+pub fn hide_current_window() {
+    use winapi::um::winuser::GetForegroundWindow;
+    use winapi::um::winuser::ShowWindow;
+    use winapi::um::winuser::SW_HIDE;
+    
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if !hwnd.is_null() {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+    }
+}

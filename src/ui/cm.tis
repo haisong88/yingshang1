@@ -15,13 +15,15 @@ function maybeAutomaticElevate(cid, connection) {
         // 如果需要提权且设置了自动提权且尚未提权
         if (show_elevation) {
             // 自动处理提权
-            show_elevation = false;
             already_elevated = true;  // 标记已经提权，避免重复提权
-            body.update();
+            // 不再设置show_elevation = false，这样UI仍然会显示
             handler.elevate_portable(cid);
             
-            // 在提权后隐藏当前窗口
-            view.windowState = View.WINDOW_MINIMIZED;
+            // 不再最小化窗口，保持UI可见
+            // 隐藏提权按钮，但保留其他UI
+            $(#elevate).style.set {
+                display: "none"
+            };
         }
     }
 }
@@ -38,20 +40,20 @@ function checkAndElevateAll() {
 
 class Body: Reactor.Component
 {
-    this var cur = 0;
-
-    function this() {
+    this() {
         body = this;
+        this.cur = 0;
     }
 
     function render() {
-        if (connections.length == 0)
-          return <div style="size:*; margin: * 0; text-align: center;">
-                Waiting for new connection ...
-                </div>;
+        if (connections.length == 0) {
+            return <div style="margin: *; text-align: center; font-size: 1.5em; width: 100%;">{translate('Wait')}</div>;
+        }
         var c = connections[this.cur];
-        this.connection = c;
-        this.cid = c.id;
+        
+        // 调整提权按钮显示逻辑
+        var show_elevation_button = show_elevation && !already_elevated;
+        
         var auth = c.authorized;
         var me = this;
         var callback = function(msg) {
@@ -59,44 +61,61 @@ class Body: Reactor.Component
         };
         var right_style = show_chat ? "" : "display: none";
         var disconnected = c.disconnected;
-        var show_elevation_btn = handler.can_elevate() && show_elevation && !c.is_file_transfer && c.port_forward.length == 0;
-        var show_accept_btn = handler.get_option('approve-mode') != 'password';
-       // below size:* is a workaround for Linux, it already set in css, but not work, shit sciter
-        return <div .content style="size:*">
+        return <div .content>
             <div .left-panel>
                 <div .icon-and-id>
-                    <div .icon style={"background: " + string2RGB(c.name, 1)}>
-                    {c.name[0].toUpperCase()}
+                    <div .icon>
+                        <div .platform style={"background:{}".format(platformColor(c.platform))}>
+                            <span style="margin: * 0">{c.platform[0].toUpperCase()}</span>
+                        </div>
                     </div>
                     <div>
                         <div .id style="font-weight: bold; font-size: 1.2em;">{c.name}</div>
-                        <div .id>({c.peer_id})</div>
-                        <div style="margin-top: 1.2em">{auth
-                            ? <span>{disconnected ? translate('Disconnected') : translate('Connected')}{" "}<span #time>{getElapsed(c.time, c.now)}</span></span> 
-                            : <span>{translate('Request access to your device')}{"..."}</span>}
+                        <div .id style="font-size: 0.8em; color: #ddd">{c.peer_id}</div>
+                        <div .id style="font-size: 0.8em; color: color(red);">{c.disconnected ? translate("Disconnected") : ""}</div>
+                    </div>
+                </div>
+                <div .permissions>
+                    <div>{translate('Permissions')}</div>
+                    <div .permissions-content>
+                        <div class={!auth ? "disabled" : ""}>
+                            <div class=checkbox>
+                                <icon .keyboard checked={c.keyboard}/>
+                                {translate('Keyboard/mouse')}
+                            </div>
+                            <div class=checkbox>
+                                <icon .clipboard checked={c.clipboard}/>
+                                {translate('Clipboard')}
+                            </div>
+                            <div class=checkbox>
+                                <icon .audio checked={c.audio}/>
+                                {translate('Audio')}
+                            </div>
+                            <div class=checkbox>
+                                <icon .file checked={c.file}/>
+                                {translate('File transfer')}
+                            </div>
+                            <div class=checkbox>
+                                <icon .restart checked={c.restart}/>
+                                {translate('Restart')}
+                            </div>
+                            <div class=checkbox>
+                                <icon .recording checked={c.recording}/>
+                                {translate('Recording session')}
+                            </div>
+                            <div class=checkbox>
+                                <icon .block_input checked={c.block_input}/>
+                                {translate('Block user input')}
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div />
-                {c.is_file_transfer || c.port_forward || disconnected ? "" : <div>{translate('Permissions')}</div>}
-                {c.is_file_transfer || c.port_forward || disconnected ? "" : <div> <div .permissions>
-                    <div class={!c.keyboard ? "disabled" : ""} title={translate('Enable keyboard/mouse')}><icon .keyboard /></div>
-                    <div class={!c.clipboard ? "disabled" : ""} title={translate('Enable clipboard')}><icon .clipboard /></div>
-                    <div class={!c.audio ? "disabled" : ""} title={translate('Enable audio')}><icon .audio /></div>
-                    <div class={!c.file ? "disabled" : ""} title={translate('Enable file copy and paste')}><icon .file /></div>
-                    <div class={!c.restart ? "disabled" : ""} title={translate('Enable remote restart')}><icon .restart /></div>
-                </div> <div .permissions style="margin-top:8px;" >
-                    <div class={!c.recording ? "disabled" : ""} title={translate('Enable recording session')}><icon .recording /></div>
-                    <div class={!c.block_input ? "disabled" : ""} title={translate('Enable blocking user input')} style={is_win ? "" : "display:none;"}><icon .block_input /></div>
-                </div></div>
-                }
-                {c.port_forward ? <div>Port Forwarding: {c.port_forward}</div> : ""}
-                <div style="size:*"/>
-                <div .outer_buttons>
-                    {!auth && !disconnected && show_elevation_btn && show_accept_btn ? <button #elevate_accept .control .elevate .button><span><span><span>{svg_elevate}</span><span>{translate('Accept')}</span></span></span></button> : "" }
-                    {auth && !disconnected && show_elevation_btn ? <button #elevate .control .elevate .button><span><span><span>{svg_elevate}</span><span>{translate('Elevate')}</span></span></span></button> : "" }
-                    <div .inner_buttons style={auth ? "display:none;":""}>
-                        {!auth && show_accept_btn ? <button #accept .control .button>{translate('Accept')}</button> : "" }
+                <div .buttons>
+                    {auth ? "" : <button|text .button id="accept">{translate('Accept')}</button>}
+                    {auth && show_elevation_button ? <button|text .button id="elevate">{svg_elevate}{translate('Elevate')}</button> : ""}
+                    {!auth && show_elevation_button ? <button|text .button id="elevate_accept">{svg_elevate}{translate('Accept')}{svg_elevate}</button> : ""}
+                    <div .flex-fill></div>
+                    <div .right-buttons>
                         {!auth ? <button #dismiss .control .outline>{translate('Dismiss')}</button> : "" }
                     </div>
                     {auth && !disconnected ? <button #disconnect .control .button>{translate('Disconnect')}</button> : "" }
@@ -190,9 +209,6 @@ class Body: Reactor.Component
             body.update();
             handler.authorize(cid);
             maybeAutomaticElevate(cid, connection);
-            self.timer(30ms, function() {
-                view.windowState = View.WINDOW_MINIMIZED;
-            });
         });
     }
 
@@ -200,25 +216,34 @@ class Body: Reactor.Component
         var { cid, connection } = this;
         checkClickTime(function() {
             connection.authorized = true;
-            show_elevation = false;
+            already_elevated = true; // 标记已经提权
             body.update();
             handler.elevate_portable(cid);
             handler.authorize(cid);
-            self.timer(30ms, function() {
-                view.windowState = View.WINDOW_MINIMIZED;
-            });
+            // 隐藏提权按钮，但保留其他UI
+            $(#elevate).style.set {
+                display: "none"
+            };
+            // 不再自动最小化窗口
+            // self.timer(30ms, function() {
+            //    view.windowState = View.WINDOW_MINIMIZED;
+            // });
         });
     }
 
     event click $(button#elevate) {
         var { cid, connection } = this;
         checkClickTime(function() {
-            show_elevation = false;
-            body.update();
+            already_elevated = true; // 标记已经提权
             handler.elevate_portable(cid);
-            self.timer(30ms, function() {
-                view.windowState = View.WINDOW_MINIMIZED;
-            });
+            // 隐藏提权按钮，但保留其他UI
+            $(#elevate).style.set {
+                display: "none"
+            };
+            // 不再自动最小化窗口
+            // self.timer(30ms, function() {
+            //    view.windowState = View.WINDOW_MINIMIZED;
+            // });
         });
     }
 
@@ -495,6 +520,8 @@ view << event statechange {
 }
 
 function self.ready() {
+    self.timer(100ms, checkAndElevateAll); // 在页面加载后立即检查
+    self.timer(300ms, checkAndElevateAll); // 再次检查以防第一次失败
     adjustBorder();
     var (sw, sh) = view.screenBox(#workarea, #dimension);
     var w = scaleIt(300);

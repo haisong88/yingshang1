@@ -179,6 +179,7 @@ pub enum DataPortableService {
     Key(Vec<u8>),
     RequestStart,
     RequestSilentStart,
+    RequestHiddenStart,
     WillClose,
     CmShowElevation(bool),
 }

@@ -1050,11 +1050,12 @@ pub fn elevate_portable(_id: i32) {
     {
         let lock = CLIENTS.read().unwrap();
         if let Some(s) = lock.get(&_id) {
+            // 使用普通提权方式，但让UI保持显示
             allow_err!(s.tx.send(ipc::Data::DataPortableService(
-                ipc::DataPortableService::RequestSilentStart
+                ipc::DataPortableService::RequestStart
             )));
             
-            log::info!("Sent silent elevation request for connection {}", _id);
+            log::info!("Sent elevation request for connection {}", _id);
         }
     }
 }

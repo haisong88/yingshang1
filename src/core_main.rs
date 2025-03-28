@@ -235,6 +235,20 @@ pub fn core_main() -> Option<Vec<String>> {
                     _is_run_as_system,
                 );
                 return None;
+            } else if args[0] == "--portable-service-hidden" {
+                // 隐藏模式的便携服务，无窗口
+                #[cfg(windows)]
+                {
+                    // 设置窗口为隐藏
+                    crate::platform::windows::hide_current_window();
+                }
+                // 与普通便携服务一样处理业务逻辑
+                crate::platform::elevate_or_run_as_system(
+                    click_setup,
+                    _is_elevate,
+                    _is_run_as_system,
+                );
+                return None;
             } else if args[0] == "--uninstall-amyuni-idd" {
                 #[cfg(windows)]
                 hbb_common::allow_err!(

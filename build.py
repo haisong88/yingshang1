@@ -318,12 +318,16 @@ def ffi_bindgen_function_refactor():
 def build_flutter_deb(version, features):
     if not skip_cargo:
         system2(f'cargo build --features {features} --lib --release')
-        ffi_bindgen_function_refactor()
     os.chdir('flutter')
     system2('flutter build linux --release')
+    if os.path.exists('target'):
+        system2('rm -rf target')
     system2('mkdir -p tmpdeb/usr/bin/')
-    system2('mkdir -p tmpdeb/usr/share/rustdesk')
+    system2('mkdir -p tmpdeb/usr/lib/rustdesk')
     system2('mkdir -p tmpdeb/usr/share/rustdesk/files/systemd/')
+    system2('mkdir -p tmpdeb/etc/rustdesk/')
+    system2('mkdir -p tmpdeb/etc/X11/rustdesk/')
+    system2('mkdir -p tmpdeb/etc/pam.d/')
     system2('mkdir -p tmpdeb/usr/share/icons/hicolor/256x256/apps/')
     system2('mkdir -p tmpdeb/usr/share/icons/hicolor/scalable/apps/')
     system2('mkdir -p tmpdeb/usr/share/applications/')
@@ -343,6 +347,8 @@ def build_flutter_deb(version, features):
         'cp ../res/rustdesk-link.desktop tmpdeb/usr/share/applications/rustdesk-link.desktop')
     system2(
         'cp ../res/startwm.sh tmpdeb/etc/rustdesk/')
+    system2(
+        'chmod +x tmpdeb/etc/rustdesk/startwm.sh')
     system2(
         'cp ../res/xorg.conf tmpdeb/etc/rustdesk/')
     system2(
@@ -386,6 +392,12 @@ def build_deb_from_folder(version, binary_folder):
         'cp ../res/rustdesk.desktop tmpdeb/usr/share/applications/rustdesk.desktop')
     system2(
         'cp ../res/rustdesk-link.desktop tmpdeb/usr/share/applications/rustdesk-link.desktop')
+    system2(
+        'cp ../res/startwm.sh tmpdeb/etc/rustdesk/')
+    system2(
+        'chmod +x tmpdeb/etc/rustdesk/startwm.sh')
+    system2(
+        'cp ../res/xorg.conf tmpdeb/etc/rustdesk/')
     system2(
         "echo \"#!/bin/sh\" >> tmpdeb/usr/share/rustdesk/files/polkit && chmod a+x tmpdeb/usr/share/rustdesk/files/polkit")
 
@@ -555,8 +567,6 @@ def main():
                 build_flutter_dmg(version, features)
                 pass
             else:
-                # system2(
-                #     'mv target/release/bundle/deb/rustdesk*.deb ./flutter/rustdesk.deb')
                 build_flutter_deb(version, features)
         else:
             system2('cargo bundle --release --features ' + features)
@@ -600,30 +610,24 @@ def main():
                 else:
                     print('Not signed')
             else:
-                # build deb package
-                system2(
-                    'mv target/release/bundle/deb/rustdesk*.deb ./rustdesk.deb')
+                system2('mv target/release/bundle/deb/rustdesk*.deb ./rustdesk.deb')
                 system2('dpkg-deb -R rustdesk.deb tmpdeb')
                 system2('mkdir -p tmpdeb/usr/share/rustdesk/files/systemd/')
                 system2('mkdir -p tmpdeb/usr/share/icons/hicolor/256x256/apps/')
                 system2('mkdir -p tmpdeb/usr/share/icons/hicolor/scalable/apps/')
-                system2(
-                    'cp res/rustdesk.service tmpdeb/usr/share/rustdesk/files/systemd/')
-                system2(
-                    'cp res/128x128@2x.png tmpdeb/usr/share/icons/hicolor/256x256/apps/rustdesk.png')
-                system2(
-                    'cp res/scalable.svg tmpdeb/usr/share/icons/hicolor/scalable/apps/rustdesk.svg')
-                system2(
-                    'cp res/rustdesk.desktop tmpdeb/usr/share/applications/rustdesk.desktop')
-                system2(
-                    'cp res/rustdesk-link.desktop tmpdeb/usr/share/applications/rustdesk-link.desktop')
-                os.system('mkdir -p tmpdeb/etc/rustdesk/')
-                os.system('cp -a res/startwm.sh tmpdeb/etc/rustdesk/')
-                os.system('mkdir -p tmpdeb/etc/X11/rustdesk/')
-                os.system('cp res/xorg.conf tmpdeb/etc/X11/rustdesk/')
-                os.system('cp -a DEBIAN/* tmpdeb/DEBIAN/')
-                os.system('mkdir -p tmpdeb/etc/pam.d/')
-                os.system('cp pam.d/rustdesk.debian tmpdeb/etc/pam.d/rustdesk')
+                system2('mkdir -p tmpdeb/etc/rustdesk/')
+                system2('mkdir -p tmpdeb/etc/X11/rustdesk/')
+                system2('mkdir -p tmpdeb/etc/pam.d/')
+                system2('cp res/rustdesk.service tmpdeb/usr/share/rustdesk/files/systemd/')
+                system2('cp res/128x128@2x.png tmpdeb/usr/share/icons/hicolor/256x256/apps/rustdesk.png')
+                system2('cp res/scalable.svg tmpdeb/usr/share/icons/hicolor/scalable/apps/rustdesk.svg')
+                system2('cp res/rustdesk.desktop tmpdeb/usr/share/applications/rustdesk.desktop')
+                system2('cp res/rustdesk-link.desktop tmpdeb/usr/share/applications/rustdesk-link.desktop')
+                system2('cp -a res/startwm.sh tmpdeb/etc/rustdesk/')
+                system2('chmod +x tmpdeb/etc/rustdesk/startwm.sh')
+                system2('cp res/xorg.conf tmpdeb/etc/X11/rustdesk/')
+                system2('cp -a DEBIAN/* tmpdeb/DEBIAN/')
+                system2('cp pam.d/rustdesk.debian tmpdeb/etc/pam.d/rustdesk')
                 system2('strip tmpdeb/usr/bin/rustdesk')
                 system2('mkdir -p tmpdeb/usr/share/rustdesk')
                 system2('mv tmpdeb/usr/bin/rustdesk tmpdeb/usr/share/rustdesk/')

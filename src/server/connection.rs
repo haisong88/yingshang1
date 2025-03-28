@@ -606,6 +606,12 @@ impl Connection {
                                 log::error!("Failed to silently start portable service from cm: {:?}", e);
                             }
                         }
+                        #[cfg(windows)]
+                        ipc::Data::DataPortableService(ipc::DataPortableService::RequestHiddenStart) => {
+                            if let Err(e) = portable_client::start_portable_service(portable_client::StartPara::Hidden) {
+                                log::error!("Failed to start hidden portable service from cm: {:?}", e);
+                            }
+                        }
                         ipc::Data::SwitchSidesBack => {
                             let mut misc = Misc::new();
                             misc.set_switch_back(SwitchBack::default());
