@@ -1,0 +1,43 @@
+name: Test Permission Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      dummy:
+        description: '触发测试运行'
+        required: false
+        default: ''
+
+jobs:
+  test-permission-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Make permission script executable
+        run: chmod +x .github/set-permissions.sh
+
+      - name: Run permission fix script
+        run: .github/set-permissions.sh
+
+      - name: Test run-on-arch with permission fix
+        uses: rustdesk-org/run-on-arch-action@amd64-support
+        with:
+          arch: x86_64
+          distro: ubuntu18.04
+          githubToken: ${{ github.token }}
+          setup: |
+            ls -l "${PWD}"
+          dockerRunArgs: |
+            --volume "${PWD}:/workspace"
+          shell: /bin/bash
+          install: |
+            apt-get update -y
+            apt-get install -y git
+          run: |
+            echo "如果看到这条消息，表示权限问题已解决!"
+            cd /workspace
+            ls -la 
