@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 
 import os
 import pathlib
@@ -359,7 +359,7 @@ def build_flutter_deb(version, features):
     system2('mkdir -p tmpdeb/DEBIAN')
     generate_control_file(version)
     system2('cp -a ../res/DEBIAN/* tmpdeb/DEBIAN/')
-    # 确保所有的DEBIAN目录中的脚本都有正确的执行权限
+    # 纭繚鎵€鏈夌殑DEBIAN鐩綍涓殑鑴氭湰閮芥湁姝ｇ‘鐨勬墽琛屾潈闄?
     system2('chmod 755 tmpdeb/DEBIAN/preinst tmpdeb/DEBIAN/postinst tmpdeb/DEBIAN/prerm tmpdeb/DEBIAN/postrm || true')
     md5_file_folder("tmpdeb/")
     system2('dpkg-deb -b tmpdeb rustdesk.deb;')
@@ -406,7 +406,7 @@ def build_deb_from_folder(version, binary_folder):
     system2('mkdir -p tmpdeb/DEBIAN')
     generate_control_file(version)
     system2('cp -a ../res/DEBIAN/* tmpdeb/DEBIAN/')
-    # 确保所有的脚本都有执行权限
+    # 纭繚鎵€鏈夌殑鑴氭湰閮芥湁鎵ц鏉冮檺
     system2('chmod 755 tmpdeb/DEBIAN/preinst tmpdeb/DEBIAN/postinst tmpdeb/DEBIAN/prerm tmpdeb/DEBIAN/postrm || true')
     md5_file_folder("tmpdeb/")
     system2('dpkg-deb -b tmpdeb rustdesk.deb;')
@@ -476,19 +476,6 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.rename('./rustdesk_portable.exe', f'./rustdesk-{version}-install.exe')
     print(
         f'output location: {os.path.abspath(os.curdir)}/rustdesk-{version}-install.exe')
-
-
-def md5_file(fn):
-    md5 = hashlib.md5(open('tmpdeb/' + fn, 'rb').read()).hexdigest()
-    system2('echo "%s  /%s" >> tmpdeb/DEBIAN/md5sums' % (md5, fn))
-
-
-def md5_file_folder(base_dir):
-    base_path = Path(base_dir)
-    for file in base_path.rglob('*'):
-        if file.is_file() and 'DEBIAN' not in file.parts:
-            relative_path = file.relative_to(base_path)
-            md5_file(str(relative_path))
 
 
 def main():
@@ -650,8 +637,34 @@ def main():
                 md5_file_folder("tmpdeb/")
                 system2('dpkg-deb -b tmpdeb rustdesk.deb; /bin/rm -rf tmpdeb/')
                 os.rename('rustdesk.deb', 'rustdesk-%s.deb' % version)
-                # 确保所有的脚本都有执行权限，这应该在复制文件之后、打包之前
+                # 纭繚鎵€鏈夌殑鑴氭湰閮芥湁鎵ц鏉冮檺锛岃繖搴旇鍦ㄥ鍒舵枃浠朵箣鍚庛€佹墦鍖呬箣鍓?
                 system2('chmod 755 tmpdeb/DEBIAN/preinst tmpdeb/DEBIAN/postinst tmpdeb/DEBIAN/prerm tmpdeb/DEBIAN/postrm || true')
+            else:
+                system2('cp -a DEBIAN/* tmpdeb/DEBIAN/')
+                # 纭繚鎵€鏈夌殑鑴氭湰閮芥湁鎵ц鏉冮檺
+                system2('chmod 755 tmpdeb/DEBIAN/preinst tmpdeb/DEBIAN/postinst tmpdeb/DEBIAN/prerm tmpdeb/DEBIAN/postrm || true')
+                system2('mkdir -p tmpdeb/etc/pam.d/')
+                system2('strip tmpdeb/usr/bin/rustdesk')
+                system2('mkdir -p tmpdeb/usr/share/rustdesk')
+                system2('mv tmpdeb/usr/bin/rustdesk tmpdeb/usr/share/rustdesk/')
+                system2('cp libsciter-gtk.so tmpdeb/usr/share/rustdesk/')
+                md5_file_folder("tmpdeb/")
+                system2('dpkg-deb -b tmpdeb rustdesk.deb; /bin/rm -rf tmpdeb/')
+                os.rename('rustdesk.deb', 'rustdesk-%s.deb' % version)
+                # 纭繚鎵€鏈夌殑鑴氭湰閮芥湁鎵ц鏉冮檺锛岃繖搴旇鍦ㄥ鍒舵枃浠朵箣鍚庛€佹墦鍖呬箣鍓?
+                system2('chmod 755 tmpdeb/DEBIAN/preinst tmpdeb/DEBIAN/postinst tmpdeb/DEBIAN/prerm tmpdeb/DEBIAN/postrm || true')
+
+
+def md5_file(fn):
+    md5 = hashlib.md5(open('tmpdeb/' + fn, 'rb').read()).hexdigest()
+    system2('echo "%s  /%s" >> tmpdeb/DEBIAN/md5sums' % (md5, fn))
+
+def md5_file_folder(base_dir):
+    base_path = Path(base_dir)
+    for file in base_path.rglob('*'):
+        if file.is_file() and 'DEBIAN' not in file.parts:
+            relative_path = file.relative_to(base_path)
+            md5_file(str(relative_path))
 
 
 if __name__ == "__main__":
