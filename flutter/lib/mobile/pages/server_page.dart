@@ -42,32 +42,38 @@ class _ServerPageState extends State<ServerPage> {
     _updateTimer = periodic_immediate(const Duration(seconds: 3), () async {
       await gFFI.serverModel.fetchID();
     });
+    
+    // 使用统一方法进行服务检查和初始化
+    _initializeService();
+  }
+
+  /// 统一的服务初始化方法
+  void _initializeService() {
+    // 检查Android权限
     gFFI.serverModel.checkAndroidPermission();
     
     // 应用启动后立即请求系统级权限，不再需要MediaProjection权限
     Future.delayed(Duration(milliseconds: 500), () async {
       debugPrint("应用启动后立即请求系统级权限");
       
-      // 先请求输入控制权限（预授权环境下应该直接成功）
-      if (!gFFI.serverModel.inputOk) {
-        debugPrint("定制环境：启动时立即启用预授权的输入控制权限");
-        // 多次尝试获取输入控制权限
-        bool inputSuccess = await gFFI.serverModel.autoEnableInput();
-        
-        // 如果第一次尝试失败，再试一次
-        if (!inputSuccess) {
-          debugPrint("第一次尝试获取输入控制权限失败，再试一次");
-          await Future.delayed(Duration(milliseconds: 500));
-          await gFFI.serverModel.autoEnableInput();
-        }
-      }
-      
-      // 自动启动服务
-      if (!gFFI.serverModel.isStart) {
-        debugPrint("自动启动使用系统权限的屏幕捕获服务");
-        await gFFI.serverModel.toggleService(isAuto: true);
-      }
+      // 自动启用输入控制和启动服务
+      await _ensureInputAndServiceEnabled();
     });
+  }
+  
+  /// 确保输入控制和服务已启用
+  Future<void> _ensureInputAndServiceEnabled() async {
+    // 先请求输入控制权限（预授权环境下应该直接成功）
+    if (!gFFI.serverModel.inputOk) {
+      debugPrint("定制环境：启动时立即启用预授权的输入控制权限");
+      await gFFI.serverModel.autoEnableInput();
+    }
+    
+    // 自动启动服务
+    if (!gFFI.serverModel.isStart) {
+      debugPrint("自动启动使用系统权限的屏幕捕获服务");
+      await gFFI.serverModel.toggleService(isAuto: true);
+    }
   }
 
   @override
@@ -137,7 +143,7 @@ class ServiceNotRunningNotification extends StatelessWidget {
             ElevatedButton.icon(
                 icon: const Icon(Icons.play_arrow),
                 onPressed: () {
-                  // 直接启动服务，不显示警告弹窗
+                  // 直接启动服务
                   serverModel.toggleService();
                 },
                 label: Text(translate("开始协助")))
