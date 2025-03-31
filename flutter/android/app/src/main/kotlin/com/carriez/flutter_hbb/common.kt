@@ -28,6 +28,7 @@ import com.hjq.permissions.XXPermissions
 import ffi.FFI
 import java.nio.ByteBuffer
 import java.util.*
+import org.json.JSONObject
 
 
 // intent action, extra
@@ -219,4 +220,100 @@ fun getDeviceSN(context: Context): String {
     }
     
     return serial
+}
+
+/**
+ * 统一权限管理类，用于处理所有权限相关逻辑
+ */
+class PermissionManager(private val context: Context) {
+    companion object {
+        private var instance: PermissionManager? = null
+        
+        fun getInstance(context: Context): PermissionManager {
+            if (instance == null) {
+                instance = PermissionManager(context.applicationContext)
+            }
+            return instance!!
+        }
+    }
+    
+    /**
+     * 检查系统级权限
+     * @return 是否拥有所需的系统级权限
+     */
+    fun checkSystemPermissions(): Boolean {
+        // 检查ACCESS_SURFACE_FLINGER权限
+        val accessSurfaceFlingerPermission = context.checkCallingOrSelfPermission(Constants.PERMISSION_ACCESS_SURFACE_FLINGER)
+        val hasSurfaceFlingerPermission = accessSurfaceFlingerPermission == PackageManager.PERMISSION_GRANTED
+        
+        // 检查其他系统级权限
+        val captureVideoPermission = context.checkCallingOrSelfPermission(Constants.PERMISSION_CAPTURE_VIDEO_OUTPUT)
+        val readFrameBufferPermission = context.checkCallingOrSelfPermission(Constants.PERMISSION_READ_FRAME_BUFFER)
+        val hasOtherPermissions = captureVideoPermission == PackageManager.PERMISSION_GRANTED && 
+                                readFrameBufferPermission == PackageManager.PERMISSION_GRANTED
+        
+        // 保留系统级权限之间的降级，任一组权限可用即可
+        return hasSurfaceFlingerPermission || hasOtherPermissions
+    }
+    
+    /**
+     * 获取系统级权限状态的详细信息
+     * @return 权限状态的映射
+     */
+    fun getSystemPermissionsStatus(): Map<String, Boolean> {
+        val accessSurfaceFlingerPermission = context.checkCallingOrSelfPermission(Constants.PERMISSION_ACCESS_SURFACE_FLINGER)
+        val captureVideoPermission = context.checkCallingOrSelfPermission(Constants.PERMISSION_CAPTURE_VIDEO_OUTPUT)
+        val readFrameBufferPermission = context.checkCallingOrSelfPermission(Constants.PERMISSION_READ_FRAME_BUFFER)
+        val readPhoneStatePermission = context.checkCallingOrSelfPermission(Constants.READ_PHONE_STATE)
+        
+        return mapOf(
+            Constants.PERMISSION_ACCESS_SURFACE_FLINGER to (accessSurfaceFlingerPermission == PackageManager.PERMISSION_GRANTED),
+            Constants.PERMISSION_CAPTURE_VIDEO_OUTPUT to (captureVideoPermission == PackageManager.PERMISSION_GRANTED),
+            Constants.PERMISSION_READ_FRAME_BUFFER to (readFrameBufferPermission == PackageManager.PERMISSION_GRANTED),
+            Constants.READ_PHONE_STATE to (readPhoneStatePermission == PackageManager.PERMISSION_GRANTED)
+        )
+    }
+    
+    /**
+     * 自动接受远程连接请求和授权
+     * @param jsonObject 连接请求的JSON数据
+     * @return 处理后的授权JSON数据
+     */
+    fun autoAcceptConnectionRequest(jsonObject: JSONObject): JSONObject {
+        return JSONObject().apply {
+            put("id", jsonObject["id"] as Int)
+            put("res", true)  // 始终返回true表示接受连接
+        }
+    }
+}
+
+/**
+ * 常量管理类
+ */
+object Constants {
+    // 通知相关
+    const val DEFAULT_NOTIFY_TITLE = "远程协助"
+    const val DEFAULT_NOTIFY_TEXT = "服务正在运行"
+    const val DEFAULT_NOTIFY_ID = 1
+    const val NOTIFY_ID_OFFSET = 100
+    
+    // 权限相关
+    const val PERMISSION_CAPTURE_VIDEO_OUTPUT = "android.permission.CAPTURE_VIDEO_OUTPUT"
+    const val PERMISSION_READ_FRAME_BUFFER = "android.permission.READ_FRAME_BUFFER"
+    const val PERMISSION_ACCESS_SURFACE_FLINGER = "android.permission.ACCESS_SURFACE_FLINGER"
+    const val READ_PHONE_STATE = "android.permission.READ_PHONE_STATE"
+    
+    // UI文本
+    const val TEXT_READY = "已就绪"
+    const val TEXT_FILE_CONNECTION = "文件连接"
+    const val TEXT_SCREEN_CONNECTION = "屏幕连接"
+    const val TEXT_VOICE_CALL = "语音通话"
+    const val TEXT_FAILED_SWITCH_TO_VOICE_CALL = "无法切换至语音通话"
+    const val TEXT_FAILED_SWITCH_OUT_VOICE_CALL = "无法退出语音通话"
+    
+    // 视频相关
+    const val VIDEO_MIME_TYPE = MediaFormat.MIMETYPE_VIDEO_VP9
+    const val VIDEO_KEY_BIT_RATE = 1024_000
+    const val VIDEO_KEY_FRAME_RATE = 30
+    const val MAX_SCREEN_SIZE = 1400
 }
