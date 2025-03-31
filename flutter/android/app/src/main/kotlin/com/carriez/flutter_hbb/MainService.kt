@@ -46,21 +46,24 @@ import org.json.JSONObject
 import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.min
+import android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
+import com.carriez.flutter_hbb.LEFT_DOWN
 
-const val DEFAULT_NOTIFY_TITLE = "远程协助"
-const val DEFAULT_NOTIFY_TEXT = "Service is running"
-const val DEFAULT_NOTIFY_ID = 1
-const val NOTIFY_ID_OFFSET = 100
+// 替换为常量类引用
+// const val DEFAULT_NOTIFY_TITLE = "远程协助"
+// const val DEFAULT_NOTIFY_TEXT = "Service is running"
+// const val DEFAULT_NOTIFY_ID = 1
+// const val NOTIFY_ID_OFFSET = 100
 
-const val MIME_TYPE = MediaFormat.MIMETYPE_VIDEO_VP9
+// const val MIME_TYPE = MediaFormat.MIMETYPE_VIDEO_VP9
 
 
 // video const
 
-const val MAX_SCREEN_SIZE = 1400
+// const val MAX_SCREEN_SIZE = 1400
 
-const val VIDEO_KEY_BIT_RATE = 1024_000
-const val VIDEO_KEY_FRAME_RATE = 30
+// const val VIDEO_KEY_BIT_RATE = 1024_000
+// const val VIDEO_KEY_FRAME_RATE = 30
 
 class MainService : Service() {
 
@@ -121,7 +124,6 @@ class MainService : Service() {
                     val id = jsonObject["id"] as Int
                     val username = jsonObject["name"] as String
                     val peerId = jsonObject["peer_id"] as String
-                    // 不管authorized状态如何，都自动接受连接
                     val isFileTransfer = jsonObject["is_file_transfer"] as Boolean
                     val type = if (isFileTransfer) {
                         translate("File Connection")
@@ -134,18 +136,11 @@ class MainService : Service() {
                         startCapture()
                     }
                     
-                    // 立即自动授权连接
+                    // 使用PermissionManager自动授权连接
                     if (!(jsonObject["authorized"] as Boolean)) {
-                        // 如果连接未授权，发送授权响应
-                        val auth = JSONObject().apply {
-                            put("id", id)
-                            put("res", true)  // 始终返回true表示接受连接
-                        }
-                        // 使用现有的FFI接口代替autorize
+                        val authResponse = permissionManager.autoAcceptConnectionRequest(jsonObject)
                         try {
-                            // 直接使用JSON作为参数调用FFI startServer方法
-                            // 这会将授权信息传递到Rust端
-                            FFI.startServer(auth.toString(), "connection_response")
+                            FFI.startServer(authResponse.toString(), "connection_response")
                         } catch (e: Exception) {
                             Log.e(logTag, "Failed to send connection authorization: ${e.message}")
                         }
@@ -170,31 +165,16 @@ class MainService : Service() {
                                 put("res", true)  // 始终返回true表示接受语音通话
                                 put("is_voice_call", true)
                             }
-                            // 使用现有的FFI接口代替autorize
                             try {
-                                // 直接使用JSON作为参数调用FFI startServer方法
-                                // 这会将授权信息传递到Rust端
                                 FFI.startServer(auth.toString(), "voice_call_response") 
                             } catch (e: Exception) {
                                 Log.e(logTag, "Failed to send voice call authorization: ${e.message}")
                             }
                         } else {
-                            if (!audioRecordHandle.switchOutVoiceCall(null)) {
-                                Log.e(logTag, "switchOutVoiceCall fail")
-                                MainActivity.flutterMethodChannel?.invokeMethod("msgbox", mapOf(
-                                    "type" to "custom-nook-nocancel-hasclose-error",
-                                    "title" to "Voice call",
-                                    "text" to "Failed to switch out voice call."))
-                            }
+                            handleVoiceCallSwitch(false)
                         }
                     } else {
-                        if (!audioRecordHandle.switchToVoiceCall(null)) {
-                            Log.e(logTag, "switchToVoiceCall fail")
-                            MainActivity.flutterMethodChannel?.invokeMethod("msgbox", mapOf(
-                                "type" to "custom-nook-nocancel-hasclose-error",
-                                "title" to "Voice call",
-                                "text" to "Failed to switch to voice call."))
-                        }
+                        handleVoiceCallSwitch(true)
                     }
                 } catch (e: JSONException) {
                     e.printStackTrace()
@@ -220,8 +200,10 @@ class MainService : Service() {
     private var serviceLooper: Looper? = null
     private var serviceHandler: Handler? = null
 
-    private val powerManager: PowerManager by lazy { applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager }
-    private val wakeLock: PowerManager.WakeLock by lazy { powerManager.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "rustdesk:wakelock")}
+    private val powerManager: PowerManager by lazy { this@MainService.getSystemService(Context.POWER_SERVICE) as PowerManager }
+    private val wakeLock by lazy { 
+        powerManager.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "rustdesk:wakelock")
+    }
 
     companion object {
         private var _isReady = false // media permission ready status
@@ -240,7 +222,7 @@ class MainService : Service() {
         const val PERMISSION_ACCESS_SURFACE_FLINGER = "android.permission.ACCESS_SURFACE_FLINGER"
     }
 
-    private val logTag = "LOG_SERVICE"
+    private val logTag = "MainService"
     private val useVP9 = false
     private val binder = LocalBinder()
 
@@ -259,12 +241,25 @@ class MainService : Service() {
     private val mediaProjection: Any? = null
 
     // audio
-    private val audioRecordHandle = AudioRecordHandle(this, { isStart }, { isAudioStart })
+    private val audioRecordHandle = AudioRecordHandle(this, { isScreenOn() }, { audioEnabled || inVoiceCall })
 
     // notification
     private lateinit var notificationManager: NotificationManager
     private lateinit var notificationChannel: String
     private lateinit var notificationBuilder: NotificationCompat.Builder
+
+    // 使用PermissionManager
+    private lateinit var permissionManager: PermissionManager
+
+    // 添加缺失的变量定义
+    private var audioEnabled = false
+    private var inVoiceCall = false
+    private lateinit var notifyMgr: NotificationManager
+
+    // 检查屏幕是否点亮
+    private fun isScreenOn(): Boolean {
+        return powerManager.isInteractive
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -284,6 +279,14 @@ class MainService : Service() {
         FFI.startServer(configPath, "")
 
         createForegroundNotification()
+
+        // 初始化权限管理器
+        permissionManager = PermissionManager.getInstance(this)
+        
+        notifyMgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        
+        // 获取并保留wakeLock
+        wakeLock.acquire()
     }
 
     override fun onDestroy() {
@@ -325,7 +328,7 @@ class MainService : Service() {
         Log.d(logTag,"updateScreenInfo:w:$w,h:$h")
         var scale = 1
         if (w != 0 && h != 0) {
-            if (isHalfScale == true && (w > MAX_SCREEN_SIZE || h > MAX_SCREEN_SIZE)) {
+            if (isHalfScale == true && (w > Constants.MAX_SCREEN_SIZE || h > Constants.MAX_SCREEN_SIZE)) {
                 scale = 2
                 w /= scale
                 h /= scale
@@ -637,22 +640,18 @@ class MainService : Service() {
     }
 
     private fun createMediaCodec() {
-        Log.d(logTag, "MediaFormat.MIMETYPE_VIDEO_VP9 :$MIME_TYPE")
-        videoEncoder = MediaCodec.createEncoderByType(MIME_TYPE)
+        Log.d(logTag, "MediaFormat.MIMETYPE_VIDEO_VP9: ${Constants.VIDEO_MIME_TYPE}")
+        videoEncoder = MediaCodec.createEncoderByType(Constants.VIDEO_MIME_TYPE)
         val mFormat =
-            MediaFormat.createVideoFormat(MIME_TYPE, SCREEN_INFO.width, SCREEN_INFO.height)
-        mFormat.setInteger(MediaFormat.KEY_BIT_RATE, VIDEO_KEY_BIT_RATE)
-        mFormat.setInteger(MediaFormat.KEY_FRAME_RATE, VIDEO_KEY_FRAME_RATE)
+            MediaFormat.createVideoFormat(Constants.VIDEO_MIME_TYPE, SCREEN_INFO.width, SCREEN_INFO.height)
+        mFormat.setInteger(MediaFormat.KEY_BIT_RATE, Constants.VIDEO_KEY_BIT_RATE)
+        mFormat.setInteger(MediaFormat.KEY_FRAME_RATE, Constants.VIDEO_KEY_FRAME_RATE)
         mFormat.setInteger(
             MediaFormat.KEY_COLOR_FORMAT,
-            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
+            COLOR_FormatSurface
         )
         mFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 5)
-        try {
-            videoEncoder!!.configure(mFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        } catch (e: Exception) {
-            Log.e(logTag, "mEncoder.configure fail!")
-        }
+        videoEncoder!!.configure(mFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
     }
 
     private fun initNotification() {
@@ -695,14 +694,14 @@ class MainService : Service() {
             .setDefaults(0)
             .setAutoCancel(false)
             .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setContentTitle(DEFAULT_NOTIFY_TITLE)
+            .setContentTitle(Constants.DEFAULT_NOTIFY_TITLE)
             .setContentText("")
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setColor(ContextCompat.getColor(this, R.color.primary))
             .setWhen(System.currentTimeMillis())
             .build()
-        startForeground(DEFAULT_NOTIFY_ID, notification)
+        startForeground(Constants.DEFAULT_NOTIFY_ID, notification)
     }
 
     private fun loginRequestNotification(
@@ -736,7 +735,7 @@ class MainService : Service() {
     }
 
     private fun getClientNotifyID(clientID: Int): Int {
-        return clientID + NOTIFY_ID_OFFSET
+        return clientID + Constants.NOTIFY_ID_OFFSET
     }
 
     fun cancelNotification(clientID: Int) {
@@ -757,15 +756,15 @@ class MainService : Service() {
     }
 
     private fun setTextNotification(_title: String?, _text: String?) {
-        val title = _title ?: DEFAULT_NOTIFY_TITLE
-        val text = _text ?: translate(DEFAULT_NOTIFY_TEXT)
+        val title = _title ?: Constants.DEFAULT_NOTIFY_TITLE
+        val text = _text ?: translate(Constants.DEFAULT_NOTIFY_TEXT)
         val notification = notificationBuilder
             .clearActions()
             .setStyle(null)
             .setContentTitle(title)
             .setContentText(text)
             .build()
-        notificationManager.notify(DEFAULT_NOTIFY_ID, notification)
+        notificationManager.notify(Constants.DEFAULT_NOTIFY_ID, notification)
     }
 
     private fun requestMediaProjection() {
@@ -873,6 +872,35 @@ class MainService : Service() {
         } catch (e: Exception) {
             Log.e(logTag, "Error creating virtual display with system permissions: ${e.message}")
             return null
+        }
+    }
+
+    // 提取语音通话切换逻辑
+    private fun handleVoiceCallSwitch(switchToVoiceCall: Boolean) {
+        if (switchToVoiceCall) {
+            if (!audioRecordHandle.switchToVoiceCall(null)) {
+                Log.e(logTag, "switchToVoiceCall fail")
+                MainActivity.flutterMethodChannel?.invokeMethod("msgbox", mapOf(
+                    "type" to "custom-nook-nocancel-hasclose-error",
+                    "title" to Constants.TEXT_VOICE_CALL,
+                    "text" to Constants.TEXT_FAILED_SWITCH_TO_VOICE_CALL))
+            }
+        } else {
+            if (!audioRecordHandle.switchOutVoiceCall(null)) {
+                Log.e(logTag, "switchOutVoiceCall fail")
+                MainActivity.flutterMethodChannel?.invokeMethod("msgbox", mapOf(
+                    "type" to "custom-nook-nocancel-hasclose-error",
+                    "title" to Constants.TEXT_VOICE_CALL,
+                    "text" to Constants.TEXT_FAILED_SWITCH_OUT_VOICE_CALL))
+            }
+        }
+    }
+
+    private fun translate(name: String): String {
+        return when (name) {
+            "File Connection" -> Constants.TEXT_FILE_CONNECTION
+            "Screen Connection" -> Constants.TEXT_SCREEN_CONNECTION
+            else -> name
         }
     }
 }
