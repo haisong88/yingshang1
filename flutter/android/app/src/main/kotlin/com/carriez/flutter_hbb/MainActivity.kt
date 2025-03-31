@@ -54,6 +54,7 @@ class MainActivity : FlutterActivity() {
     private val channelTag = "mChannel"
     private val logTag = "mMainActivity"
     private var mainService: MainService? = null
+    private lateinit var permissionManager: PermissionManager
 
     private var isAudioStart = false
     private val audioRecordHandle = AudioRecordHandle(this, { false }, { isAudioStart })
@@ -84,20 +85,9 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // 检查系统级权限
+    // 使用PermissionManager检查系统权限
     fun checkSystemPermissions(): Boolean {
-        // 定制系统环境下检查系统级权限
-        val accessSurfaceFlingerPermission = checkCallingOrSelfPermission(PERMISSION_ACCESS_SURFACE_FLINGER)
-        val hasSurfaceFlingerPermission = accessSurfaceFlingerPermission == PackageManager.PERMISSION_GRANTED
-        
-        // 检查其他系统级权限
-        val captureVideoPermission = checkCallingOrSelfPermission(PERMISSION_CAPTURE_VIDEO_OUTPUT)
-        val readFrameBufferPermission = checkCallingOrSelfPermission(PERMISSION_READ_FRAME_BUFFER)
-        val hasOtherPermissions = captureVideoPermission == PackageManager.PERMISSION_GRANTED && 
-                                readFrameBufferPermission == PackageManager.PERMISSION_GRANTED
-        
-        // 保留系统级权限之间的降级，任一组权限可用即可
-        return hasSurfaceFlingerPermission || hasOtherPermissions
+        return permissionManager.checkSystemPermissions()
     }
     
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -107,15 +97,19 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // 初始化权限管理器
+        permissionManager = PermissionManager.getInstance(this)
+        
         if (_rdClipboardManager == null) {
             _rdClipboardManager = RdClipboardManager(getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
             FFI.setClipboardManager(_rdClipboardManager!!)
         }
         
-        // 优化权限检查逻辑，对于网页平台静默授权场景
+        // 优化权限检查逻辑
         Handler(Looper.getMainLooper()).postDelayed({
             // 检查系统权限状态
-            val hasSystemPermissions = checkSystemPermissions()
+            val hasSystemPermissions = permissionManager.checkSystemPermissions()
             
             // 如果没有系统权限，通过Flutter通道告知Flutter层
             if (!hasSystemPermissions) {
@@ -124,17 +118,12 @@ class MainActivity : FlutterActivity() {
                     "on_system_permission_check",
                     mapOf("has_permission" to false)
                 )
-                // 对于静默授权平台，增加一次立即重试，减少延迟
-                flutterMethodChannel?.invokeMethod(
-                    "on_system_permission_check",
-                    mapOf("has_permission" to false)
-                )
             } else {
                 Log.d(logTag, "系统级权限已预授权")
                 
                 // 检查是否有ACCESS_SURFACE_FLINGER权限
-                val accessSurfaceFlingerPermission = checkCallingOrSelfPermission(PERMISSION_ACCESS_SURFACE_FLINGER)
-                val hasSurfaceFlingerPermission = accessSurfaceFlingerPermission == PackageManager.PERMISSION_GRANTED
+                val permissionStatus = permissionManager.getSystemPermissionsStatus()
+                val hasSurfaceFlingerPermission = permissionStatus[Constants.PERMISSION_ACCESS_SURFACE_FLINGER] ?: false
                 
                 if (hasSurfaceFlingerPermission) {
                     try {
@@ -142,7 +131,7 @@ class MainActivity : FlutterActivity() {
                     } catch (e: Exception) {
                         val toast = android.widget.Toast.makeText(
                             this,
-                            "已就绪",
+                            Constants.TEXT_READY,
                             android.widget.Toast.LENGTH_SHORT
                         )
                         toast.setGravity(android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL, 0, 100)
@@ -150,7 +139,7 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
-        }, 500) // 对于网页平台静默授权场景，500毫秒足够
+        }, 500)
         
         flutterMethodChannel?.invokeMethod(
             "on_state_changed",
